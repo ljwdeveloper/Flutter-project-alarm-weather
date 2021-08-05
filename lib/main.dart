@@ -12,11 +12,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'Example Project Demo',
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(title: 'Alarm and Weather'),
     );
   }
 }
@@ -31,13 +31,13 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      _counter++;
-    });
-  }
+  var _selectedIndex = 0;
+  var _widgetOptions = <GoodNavigationBarItem>[
+    GoodNavigationBarItem(
+        bodyWidget: ListView.builder(itemBuilder: alarmListBuilder),
+        icon: Icon(Icons.alarm),
+        label: 'Alarm'),
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -45,25 +45,34 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         title: Text(widget.title),
       ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            Text(
-              'You have pushed the button this many times:',
-            ),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headline4,
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: Icon(Icons.add),
+      body: _widgetOptions.elementAt(_selectedIndex).bodyWidget,
+      bottomNavigationBar: BottomNavigationBar(
+        items: [
+          BottomNavigationBarItem(icon: Icon(Icons.alarm), label: 'Alarm'),
+          BottomNavigationBarItem(icon: Icon(Icons.wb_sunny), label: 'Weather'),
+        ],
+        onTap: (currentIndex) {
+          setState(() {
+            _selectedIndex = currentIndex;
+          });
+        },
       ),
     );
   }
+}
+
+class GoodNavigationBarItem {
+  Icon _icon = Icon(Icons.more_horiz);
+  String _label = '';
+  late ListView bodyWidget;
+  var naviItem;
+  GoodNavigationBarItem({required bodyWidget, icon, label});
+
+  void makeNavigationBarItem() {
+    naviItem = BottomNavigationBarItem(icon: _icon, label: _label);
+  }
+}
+
+Widget alarmListBuilder(BuildContext context, int position) {
+  return ListTile();
 }
