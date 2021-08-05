@@ -74,5 +74,13 @@ class GoodNavigationBarItem {
 }
 
 Widget alarmListBuilder(BuildContext context, int position) {
-  return ListTile();
+  bool alarmOn = false;
+  return ListTile(
+    leading: Icon(Icons.alarm),
+    trailing: Switch(
+        value: alarmOn,
+        onChanged: (_alarmOn) {
+          alarmOn = _alarmOn;
+        }),
+  );
 }
