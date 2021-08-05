@@ -16,28 +16,60 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
       ),
-      home: MyHomePage(title: 'Alarm and Weather'),
+      home: RootPage(title: 'Alarm and Weather'),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  MyHomePage({Key? key, required this.title}) : super(key: key);
+class CategoryStructure {
+  Icon iconWidget = Icon(Icons.more_horiz);
+  String labelString = '';
+  Widget bodyWidget;
+  late BottomNavigationBarItem bottomBarItem;
+
+  CategoryStructure({required Widget body, Icon? icon, String? label})
+      : bodyWidget = body {
+    if (icon != null) iconWidget = icon;
+    if (label != null) labelString = label;
+    bottomBarItem =
+        BottomNavigationBarItem(icon: iconWidget, label: labelString);
+  }
+}
+
+class RootPage extends StatefulWidget {
+  RootPage({Key? key, required this.title}) : super(key: key);
 
   final String title;
 
   @override
-  _MyHomePageState createState() => _MyHomePageState();
+  _RootPageState createState() => _RootPageState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  var _selectedIndex = 0;
-  var _widgetOptions = <GoodNavigationBarItem>[
-    GoodNavigationBarItem(
-        bodyWidget: ListView.builder(itemBuilder: alarmListBuilder),
-        icon: Icon(Icons.alarm),
-        label: 'Alarm'),
-  ];
+class _RootPageState extends State<RootPage> {
+  var _selectedBottomIndex = 0;
+  var _bottomCategoryList = <CategoryStructure>[];
+  var _bottomNaviItemList = <BottomNavigationBarItem>[];
+  var _naviPageList = <Widget>[];
+  var _pageViewController = PageController();
+
+  @override
+  void initState() {
+    // TODO: implement initState
+    _bottomCategoryList.add(CategoryStructure(
+        body: AlarmPage(), icon: Icon(Icons.alarm), label: 'Alarm'));
+    _bottomCategoryList.add(CategoryStructure(
+      body: Scaffold(
+        body: Center(
+          child: Text('Korea cool'),
+        ),
+      ),
+    ));
+    for (CategoryStructure item in _bottomCategoryList) {
+      _bottomNaviItemList.add(item.bottomBarItem);
+      _naviPageList.add(item.bodyWidget);
+    }
+    super.initState();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,42 +77,53 @@ class _MyHomePageState extends State<MyHomePage> {
       appBar: AppBar(
         title: Text(widget.title),
       ),
-      body: _widgetOptions.elementAt(_selectedIndex).bodyWidget,
-      bottomNavigationBar: BottomNavigationBar(
-        items: [
-          BottomNavigationBarItem(icon: Icon(Icons.alarm), label: 'Alarm'),
-          BottomNavigationBarItem(icon: Icon(Icons.wb_sunny), label: 'Weather'),
-        ],
-        onTap: (currentIndex) {
+      body: PageView(
+        physics: BouncingScrollPhysics(),
+        controller: _pageViewController,
+        children: _naviPageList,
+        onPageChanged: (_currentIndex) {
           setState(() {
-            _selectedIndex = currentIndex;
+            _selectedBottomIndex = _currentIndex;
           });
+        },
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        selectedItemColor: Colors.blue,
+        unselectedItemColor: Colors.grey,
+        items: _bottomNaviItemList,
+        currentIndex: _selectedBottomIndex,
+        onTap: (_currentIndex) {
+          setState(() {
+            _selectedBottomIndex = _currentIndex;
+            _pageViewController.animateToPage(_currentIndex,
+                duration: Duration(milliseconds: 500),
+                curve: Curves.easeOutSine);
+          });
+          print('selected bottom index : $_selectedBottomIndex');
         },
       ),
     );
   }
 }
 
-class GoodNavigationBarItem {
-  Icon _icon = Icon(Icons.more_horiz);
-  String _label = '';
-  late ListView bodyWidget;
-  var naviItem;
-  GoodNavigationBarItem({required bodyWidget, icon, label});
-
-  void makeNavigationBarItem() {
-    naviItem = BottomNavigationBarItem(icon: _icon, label: _label);
-  }
+class AlarmPage extends StatefulWidget {
+  AlarmPage();
+  @override
+  _AlarmPageState createState() => _AlarmPageState();
 }
 
-Widget alarmListBuilder(BuildContext context, int position) {
-  bool alarmOn = false;
-  return ListTile(
-    leading: Icon(Icons.alarm),
-    trailing: Switch(
-        value: alarmOn,
-        onChanged: (_alarmOn) {
-          alarmOn = _alarmOn;
-        }),
-  );
+class _AlarmPageState extends State<AlarmPage> {
+  var alarmList = <DateTime>[];
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Text('ohoh'),
+      ),
+      floatingActionButton: FloatingActionButton(
+        child: Icon(Icons.alarm_add),
+        onPressed: () {},
+      ),
+    );
+  }
 }
