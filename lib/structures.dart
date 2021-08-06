@@ -18,7 +18,7 @@ class CategoryStructure {
 class AlarmCellStructure {
   DateTime alarmTime;
   bool alarmOn;
-  AlarmCellStructure({required DateTime alarmAt, bool alarmActive = false})
+  AlarmCellStructure({required DateTime alarmAt, bool alarmActive = true})
       : alarmTime = alarmAt,
         alarmOn = alarmActive;
   void setAlarmOn(bool alarmActive) {

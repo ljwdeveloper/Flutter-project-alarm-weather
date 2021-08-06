@@ -21,10 +21,14 @@ class _AlarmPageState extends State<AlarmPage> {
   @override
   void initState() {
     super.initState();
-    AndroidAlarmManager.initialize();
-    port.listen((message) => _incrementCounter());
+    print('init state!');
+    AndroidAlarmManager
+        .initialize(); //pageView 또는 bottomNavi 작동시 Isolate 에러나나 예외처리로 returning되는부분.
+    //port.listen((message) => _incrementCounter());
   }
-
+//주석처리한곳 어딘가가 잘못되었음. root page에서 pageView 관련하여 에러남.
+//초기화와 관련한 버그인것으로 보임.
+/*
   Future<void> _incrementCounter() async {
     print('Increment counter!');
     await prefs.reload();
@@ -32,6 +36,7 @@ class _AlarmPageState extends State<AlarmPage> {
       _counter++;
     });
   }
+*/
 
   static SendPort? uiSendPort;
   Future<void> callback() async {
@@ -74,22 +79,8 @@ class _AlarmPageState extends State<AlarmPage> {
                 },
               ),
               onTap: () {
-                Future<DateTime?> tempAlarmDate = pickAlarmDate(context);
-                tempAlarmDate.then((dateValue) {
-                  if (dateValue != null) {
-                    DateTime tempDT = dateValue;
-                    Future<TimeOfDay?> tempAlarmTime = pickAlarmTime(context);
-                    tempAlarmTime.then((timeValue) {
-                      if (timeValue != null) {
-                        tempDT = DateTime(dateValue.year, dateValue.month,
-                            dateValue.day, timeValue.hour, timeValue.minute);
-                        alarmList.elementAt(idx).alarmTime = tempDT;
-                        setState(() {});
-                        AndroidAlarmManager.oneShotAt(
-                            alarmList.elementAt(idx).alarmTime, idx, callback);
-                      }
-                    });
-                  }
+                setAlarm(context, alarmList, idx, () {
+                  setState(() {});
                 });
               },
               onLongPress: () {
@@ -107,7 +98,9 @@ class _AlarmPageState extends State<AlarmPage> {
         child: Icon(Icons.alarm_add),
         onPressed: () {
           alarmList.add(AlarmCellStructure(alarmAt: DateTime.now()));
-          setState(() {});
+          setAlarm(context, alarmList, alarmList.length - 1, () {
+            setState(() {});
+          });
         },
       ),
     );
@@ -126,14 +119,12 @@ Future deleteAlarmDialog(BuildContext context) {
             actions: [
               TextButton(
                 onPressed: () {
-                  //deleteAlarm = Future.value(true);
                   Navigator.pop(context, true);
                 },
                 child: Text('지우기', style: TextStyle(color: Colors.red)),
               ),
               TextButton(
                   onPressed: () {
-                    //deleteAlarm = Future.value(false);
                     Navigator.pop(context);
                   },
                   child: Text(
@@ -145,6 +136,28 @@ Future deleteAlarmDialog(BuildContext context) {
         });
       });
   return deleteAlarm;
+}
+
+void setAlarm(BuildContext context, List<AlarmCellStructure> alarmList, int idx,
+    void Function() finished) {
+  print('setting alarm..! lets show the pick');
+  Future<DateTime?> tempAlarmDate = pickAlarmDate(context);
+  tempAlarmDate.then((dateValue) {
+    if (dateValue != null) {
+      DateTime tempDT = dateValue;
+      Future<TimeOfDay?> tempAlarmTime = pickAlarmTime(context);
+      tempAlarmTime.then((timeValue) {
+        if (timeValue != null) {
+          tempDT = DateTime(dateValue.year, dateValue.month, dateValue.day,
+              timeValue.hour, timeValue.minute);
+          alarmList.elementAt(idx).alarmTime = tempDT;
+          AndroidAlarmManager.oneShotAt(
+              alarmList.elementAt(idx).alarmTime, idx, () {});
+          finished();
+        }
+      });
+    }
+  });
 }
 
 Future<DateTime?> pickAlarmDate(BuildContext context) {

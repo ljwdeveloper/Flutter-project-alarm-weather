@@ -1,8 +1,6 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
-import 'package:weather/weather.dart';
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'alarmpage.dart';
 import 'structures.dart';
@@ -14,6 +12,7 @@ final ReceivePort port = ReceivePort();
 late SharedPreferences prefs;
 
 Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   IsolateNameServer.registerPortWithName(port.sendPort, isolateName);
   prefs = await SharedPreferences.getInstance();
   if (!prefs.containsKey(countKey)) {
