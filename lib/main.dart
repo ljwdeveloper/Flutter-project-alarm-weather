@@ -36,6 +36,17 @@ class CategoryStructure {
   }
 }
 
+class AlarmCellStructure {
+  DateTime alarmTime;
+  bool alarmOn;
+  AlarmCellStructure({required DateTime alarmAt, bool alarmActive = false})
+      : alarmTime = alarmAt,
+        alarmOn = alarmActive;
+  void setAlarmOn(bool alarmActive) {
+    alarmOn = alarmActive;
+  }
+}
+
 class RootPage extends StatefulWidget {
   RootPage({Key? key, required this.title}) : super(key: key);
 
@@ -58,12 +69,7 @@ class _RootPageState extends State<RootPage> {
     _bottomCategoryList.add(CategoryStructure(
         body: AlarmPage(), icon: Icon(Icons.alarm), label: 'Alarm'));
     _bottomCategoryList.add(CategoryStructure(
-      body: Scaffold(
-        body: Center(
-          child: Text('Korea cool'),
-        ),
-      ),
-    ));
+        body: WeatherPage(), icon: Icon(Icons.wb_sunny), label: 'Weather'));
     for (CategoryStructure item in _bottomCategoryList) {
       _bottomNaviItemList.add(item.bottomBarItem);
       _naviPageList.add(item.bodyWidget);
@@ -113,17 +119,125 @@ class AlarmPage extends StatefulWidget {
 }
 
 class _AlarmPageState extends State<AlarmPage> {
-  var alarmList = <DateTime>[];
+  var counter = 0;
+  var alarmList = <AlarmCellStructure>[];
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Center(
-        child: Text('ohoh'),
-      ),
+      body: ListView.builder(
+          itemCount: alarmList.length,
+          physics: BouncingScrollPhysics(),
+          itemBuilder: (_, idx) {
+            var _counter;
+            var formatter = DateFormat('y-MM-dd HH:mm');
+            return ListTile(
+              leading: Padding(
+                  padding: EdgeInsets.fromLTRB(10, 10, 5, 10),
+                  child: Icon(
+                    Icons.alarm,
+                    size: 40,
+                    color: alarmList.elementAt(idx).alarmOn
+                        ? Colors.blue
+                        : Colors.grey,
+                  )),
+              title: Text(formatter.format(alarmList.elementAt(idx).alarmTime)),
+              subtitle: Text('알람'),
+              trailing: Switch(
+                value: alarmList.elementAt(idx).alarmOn,
+                onChanged: (newValue) {
+                  setState(() {
+                    alarmList.elementAt(idx).setAlarmOn(newValue);
+                  });
+                },
+              ),
+              onLongPress: () {
+                var alarmDeleteFuture = deleteAlarmDialog(context);
+                alarmDeleteFuture.then((delete) {
+                  print('alarm deleting.. delete? $delete');
+                  if (delete) {
+                    alarmList.removeAt(idx);
+                    setState(() {});
+                  }
+                });
+              },
+            );
+          }),
       floatingActionButton: FloatingActionButton(
         child: Icon(Icons.alarm_add),
-        onPressed: () {},
+        onPressed: () {
+          alarmList.add(AlarmCellStructure(alarmAt: DateTime.now()));
+          counter++;
+          setState(() {});
+        },
       ),
     );
   }
+}
+
+class WeatherPage extends StatefulWidget {
+  WeatherPage();
+  @override
+  _WeatherPageState createState() => _WeatherPageState();
+}
+
+class _WeatherPageState extends State<WeatherPage> {
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.max,
+        children: [
+          Text(
+            'data',
+            style: TextStyle(fontSize: 40, fontWeight: FontWeight.w300),
+          ),
+          SizedBox(
+            height: 20,
+          ),
+          Icon(Icons.wb_cloudy, size: 150, color: Colors.blue),
+          SizedBox(
+            height: 20,
+          ),
+          Text(
+            'data2',
+            style: TextStyle(fontSize: 45, fontWeight: FontWeight.w400),
+          )
+        ],
+      ),
+    );
+  }
+}
+
+Future deleteAlarmDialog(BuildContext context) {
+  StateSetter _setState;
+  Future deleteAlarm = showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(builder: (context, setState) {
+          _setState = setState;
+          return AlertDialog(
+            title: Text('알람을 지우시겠습니까?'),
+            actions: [
+              TextButton(
+                onPressed: () {
+                  //deleteAlarm = Future.value(true);
+                  Navigator.pop(context, true);
+                },
+                child: Text('지우기', style: TextStyle(color: Colors.red)),
+              ),
+              TextButton(
+                  onPressed: () {
+                    //deleteAlarm = Future.value(false);
+                    Navigator.pop(context);
+                  },
+                  child: Text(
+                    '취소',
+                    style: TextStyle(color: Colors.grey),
+                  ))
+            ],
+          );
+        });
+      });
+  return deleteAlarm;
 }
