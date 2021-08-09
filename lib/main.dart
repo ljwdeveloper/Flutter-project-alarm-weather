@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'alarmpage.dart';
@@ -26,9 +27,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Example Project Demo',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
+      theme: ThemeData(primarySwatch: Colors.blue),
       home: RootPage(title: 'Alarm and Weather'),
     );
   }
@@ -44,6 +43,7 @@ class RootPage extends StatefulWidget {
 }
 
 class _RootPageState extends State<RootPage> {
+  var _counter = 0;
   var _selectedBottomIndex = 0;
   var _bottomCategoryList = <CategoryStructure>[];
   var _bottomNaviItemList = <BottomNavigationBarItem>[];
@@ -62,6 +62,17 @@ class _RootPageState extends State<RootPage> {
       _naviPageList.add(item.bodyWidget);
     }
     super.initState();
+
+    AndroidAlarmManager.initialize();
+    port.listen((message) => _incrementCounter());
+  }
+
+  Future<void> _incrementCounter() async {
+    print('Increment counter!');
+    await prefs.reload();
+    setState(() {
+      _counter++;
+    });
   }
 
   @override

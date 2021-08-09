@@ -1,5 +1,6 @@
 import 'dart:isolate';
 import 'dart:ui';
+import 'dart:convert';
 
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
@@ -16,27 +17,12 @@ class AlarmPage extends StatefulWidget {
 
 class _AlarmPageState extends State<AlarmPage> {
   var _counter = 0;
-  var alarmList = <AlarmCellStructure>[];
+  AppManager appManager = AppManager();
 
   @override
   void initState() {
     super.initState();
-    print('init state!');
-    AndroidAlarmManager
-        .initialize(); //pageView 또는 bottomNavi 작동시 Isolate 에러나나 예외처리로 returning되는부분.
-    //port.listen((message) => _incrementCounter());
   }
-//주석처리한곳 어딘가가 잘못되었음. root page에서 pageView 관련하여 에러남.
-//초기화와 관련한 버그인것으로 보임.
-/*
-  Future<void> _incrementCounter() async {
-    print('Increment counter!');
-    await prefs.reload();
-    setState(() {
-      _counter++;
-    });
-  }
-*/
 
   static SendPort? uiSendPort;
   Future<void> callback() async {
@@ -49,14 +35,25 @@ class _AlarmPageState extends State<AlarmPage> {
     uiSendPort?.send(null);
   }
 
+  Future<void> getSavedAlarmInfo() async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String>? alarmData = prefs.getStringList('alarmData');
+    if (alarmData != null) {
+      for (String alarmDataString in alarmData) {
+        Map<String, dynamic> oneEntity = json.decode(alarmDataString);
+        appManager.alarmList.add(AlarmCellStructure.decodeJson(oneEntity));
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: ListView.builder(
-          itemCount: alarmList.length,
+          itemCount: appManager.alarmList.length,
           physics: BouncingScrollPhysics(),
           itemBuilder: (_, idx) {
-            var alarmDate = alarmList.elementAt(idx).alarmTime;
+            var alarmDate = appManager.alarmList.elementAt(idx).alarmTime;
             var formatter = DateFormat('y-MM-dd HH:mm');
             return ListTile(
               leading: Padding(
@@ -64,22 +61,23 @@ class _AlarmPageState extends State<AlarmPage> {
                   child: Icon(
                     Icons.alarm,
                     size: 40,
-                    color: alarmList.elementAt(idx).alarmOn
+                    color: appManager.alarmList.elementAt(idx).alarmOn
                         ? Colors.blue
                         : Colors.grey,
                   )),
-              title: Text(formatter.format(alarmList.elementAt(idx).alarmTime)),
+              title: Text(formatter
+                  .format(appManager.alarmList.elementAt(idx).alarmTime)),
               subtitle: Text('알람'),
               trailing: Switch(
-                value: alarmList.elementAt(idx).alarmOn,
+                value: appManager.alarmList.elementAt(idx).alarmOn,
                 onChanged: (newValue) {
                   setState(() {
-                    alarmList.elementAt(idx).setAlarmOn(newValue);
+                    appManager.alarmList.elementAt(idx).setAlarmOn(newValue);
                   });
                 },
               ),
               onTap: () {
-                setAlarm(context, alarmList, idx, () {
+                setAlarm(context, appManager.alarmList, idx, () {
                   setState(() {});
                 });
               },
@@ -87,7 +85,7 @@ class _AlarmPageState extends State<AlarmPage> {
                 var alarmDeleteFuture = deleteAlarmDialog(context);
                 alarmDeleteFuture.then((delete) {
                   if (delete) {
-                    alarmList.removeAt(idx);
+                    appManager.alarmList.removeAt(idx);
                     setState(() {});
                   }
                 });
@@ -97,8 +95,10 @@ class _AlarmPageState extends State<AlarmPage> {
       floatingActionButton: FloatingActionButton(
         child: Icon(Icons.alarm_add),
         onPressed: () {
-          alarmList.add(AlarmCellStructure(alarmAt: DateTime.now()));
-          setAlarm(context, alarmList, alarmList.length - 1, () {
+          appManager.alarmList.add(AlarmCellStructure(alarmAt: DateTime.now()));
+          setAlarm(
+              context, appManager.alarmList, appManager.alarmList.length - 1,
+              () {
             setState(() {});
           });
         },
@@ -140,7 +140,6 @@ Future deleteAlarmDialog(BuildContext context) {
 
 void setAlarm(BuildContext context, List<AlarmCellStructure> alarmList, int idx,
     void Function() finished) {
-  print('setting alarm..! lets show the pick');
   Future<DateTime?> tempAlarmDate = pickAlarmDate(context);
   tempAlarmDate.then((dateValue) {
     if (dateValue != null) {
