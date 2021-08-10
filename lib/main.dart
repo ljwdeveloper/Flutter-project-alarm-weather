@@ -2,23 +2,15 @@ import 'dart:ui';
 
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'alarmpage.dart';
 import 'structures.dart';
-import 'dart:isolate';
 
-const String countKey = 'count';
-const String isolateName = 'isolate';
-final ReceivePort port = ReceivePort();
-late SharedPreferences prefs;
+late AppManager appManager;
 
-Future<void> main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
-  IsolateNameServer.registerPortWithName(port.sendPort, isolateName);
-  prefs = await SharedPreferences.getInstance();
-  if (!prefs.containsKey(countKey)) {
-    await prefs.setInt(countKey, 0);
-  }
+  appManager = AppManager();
+  debuggerLog('f: main / appManager making : ${appManager.hashCode}');
   runApp(MyApp());
 }
 
@@ -62,14 +54,11 @@ class _RootPageState extends State<RootPage> {
       _naviPageList.add(item.bodyWidget);
     }
     super.initState();
-
-    AndroidAlarmManager.initialize();
-    port.listen((message) => _incrementCounter());
   }
 
   Future<void> _incrementCounter() async {
-    print('Increment counter!');
-    await prefs.reload();
+    debuggerLog('Increment counter!');
+    await appManager.prefs.reload();
     setState(() {
       _counter++;
     });
@@ -103,7 +92,6 @@ class _RootPageState extends State<RootPage> {
                 duration: Duration(milliseconds: 500),
                 curve: Curves.easeOutSine);
           });
-          print('selected bottom index : $_selectedBottomIndex');
         },
       ),
     );

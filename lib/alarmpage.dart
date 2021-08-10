@@ -1,11 +1,5 @@
-import 'dart:isolate';
-import 'dart:ui';
-import 'dart:convert';
-
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:testproject_alarm_weather/main.dart';
 import 'structures.dart';
 
@@ -21,29 +15,17 @@ class _AlarmPageState extends State<AlarmPage> {
 
   @override
   void initState() {
-    super.initState();
-  }
-
-  static SendPort? uiSendPort;
-  Future<void> callback() async {
-    print('Alarm fired!');
-    final prefs = await SharedPreferences.getInstance();
-    final currentCount = prefs.getInt(countKey);
-    await prefs.setInt(countKey, currentCount ?? 0 + 1);
-
-    uiSendPort ??= IsolateNameServer.lookupPortByName(isolateName);
-    uiSendPort?.send(null);
-  }
-
-  Future<void> getSavedAlarmInfo() async {
-    final prefs = await SharedPreferences.getInstance();
-    List<String>? alarmData = prefs.getStringList('alarmData');
-    if (alarmData != null) {
-      for (String alarmDataString in alarmData) {
-        Map<String, dynamic> oneEntity = json.decode(alarmDataString);
-        appManager.alarmList.add(AlarmCellStructure.decodeJson(oneEntity));
-      }
+    if (appManager.appManagerPrepared) {
+    } else {
+      appManager.prepareAlarmList().then((_) {
+        debuggerLog('f: RootPageState.initState() / prepareAppManager / then');
+        if (appManager.alarmList.length == 0) {
+        } else {
+          setState(() {});
+        }
+      });
     }
+    super.initState();
   }
 
   @override
@@ -72,20 +54,21 @@ class _AlarmPageState extends State<AlarmPage> {
                 value: appManager.alarmList.elementAt(idx).alarmOn,
                 onChanged: (newValue) {
                   setState(() {
-                    appManager.alarmList.elementAt(idx).setAlarmOn(newValue);
+                    //appManager.alarmList.elementAt(idx).setAlarmOn(newValue);
+                    appManager.reserveAlarmFireOnOff(
+                        index: idx, alarmActive: newValue);
                   });
                 },
               ),
               onTap: () {
-                setAlarm(context, appManager.alarmList, idx, () {
+                setAlarm(context, index: idx, finished: () {
                   setState(() {});
                 });
               },
               onLongPress: () {
-                var alarmDeleteFuture = deleteAlarmDialog(context);
-                alarmDeleteFuture.then((delete) {
-                  if (delete) {
-                    appManager.alarmList.removeAt(idx);
+                var alarmDeleteFuture = deleteAlarmDialogAt(idx, context);
+                alarmDeleteFuture.then((needUIUpdate) {
+                  if (needUIUpdate) {
                     setState(() {});
                   }
                 });
@@ -95,10 +78,7 @@ class _AlarmPageState extends State<AlarmPage> {
       floatingActionButton: FloatingActionButton(
         child: Icon(Icons.alarm_add),
         onPressed: () {
-          appManager.alarmList.add(AlarmCellStructure(alarmAt: DateTime.now()));
-          setAlarm(
-              context, appManager.alarmList, appManager.alarmList.length - 1,
-              () {
+          setAlarm(context, finished: () {
             setState(() {});
           });
         },
@@ -107,7 +87,7 @@ class _AlarmPageState extends State<AlarmPage> {
   }
 }
 
-Future deleteAlarmDialog(BuildContext context) {
+Future deleteAlarmDialogAt(int idx, BuildContext context) {
   StateSetter _setState;
   Future deleteAlarm = showDialog(
       context: context,
@@ -119,6 +99,8 @@ Future deleteAlarmDialog(BuildContext context) {
             actions: [
               TextButton(
                 onPressed: () {
+                  //알람 지우는 f
+                  appManager.deleteAlarmAt(idx);
                   Navigator.pop(context, true);
                 },
                 child: Text('지우기', style: TextStyle(color: Colors.red)),
@@ -138,8 +120,8 @@ Future deleteAlarmDialog(BuildContext context) {
   return deleteAlarm;
 }
 
-void setAlarm(BuildContext context, List<AlarmCellStructure> alarmList, int idx,
-    void Function() finished) {
+void setAlarm(BuildContext context,
+    {int? index, required void Function() finished}) {
   Future<DateTime?> tempAlarmDate = pickAlarmDate(context);
   tempAlarmDate.then((dateValue) {
     if (dateValue != null) {
@@ -149,9 +131,7 @@ void setAlarm(BuildContext context, List<AlarmCellStructure> alarmList, int idx,
         if (timeValue != null) {
           tempDT = DateTime(dateValue.year, dateValue.month, dateValue.day,
               timeValue.hour, timeValue.minute);
-          alarmList.elementAt(idx).alarmTime = tempDT;
-          AndroidAlarmManager.oneShotAt(
-              alarmList.elementAt(idx).alarmTime, idx, () {});
+          appManager.insertAlarmAt(tempDT, index: index);
           finished();
         }
       });
