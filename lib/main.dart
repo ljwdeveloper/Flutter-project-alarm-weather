@@ -10,7 +10,6 @@ late AppManager appManager;
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   appManager = AppManager();
-  debuggerLog('f: main / appManager making : ${appManager.hashCode}');
   runApp(MyApp());
 }
 

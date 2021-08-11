@@ -15,66 +15,96 @@ class _AlarmPageState extends State<AlarmPage> {
 
   @override
   void initState() {
-    if (appManager.appManagerPrepared) {
-    } else {
-      appManager.prepareAlarmList().then((_) {
-        debuggerLog('f: RootPageState.initState() / prepareAppManager / then');
-        if (appManager.alarmList.length == 0) {
-        } else {
-          setState(() {});
-        }
-      });
-    }
+    appManager.prepareAlarmList(() {
+      debuggerLog(
+          'f: RootPageState.initState() / prepareAppManager / alarmCallbackAfter');
+      setState(() {});
+    }).then((_) {
+      debuggerLog('f: RootPageState.initState() / prepareAppManager / then');
+      if (appManager.alarmList.length == 0) {
+      } else {
+        setState(() {});
+      }
+    });
     super.initState();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: ListView.builder(
-          itemCount: appManager.alarmList.length,
-          physics: BouncingScrollPhysics(),
-          itemBuilder: (_, idx) {
-            var alarmDate = appManager.alarmList.elementAt(idx).alarmTime;
-            var formatter = DateFormat('y-MM-dd HH:mm');
-            return ListTile(
-              leading: Padding(
-                  padding: EdgeInsets.fromLTRB(10, 10, 5, 10),
-                  child: Icon(
-                    Icons.alarm,
-                    size: 40,
-                    color: appManager.alarmList.elementAt(idx).alarmOn
-                        ? Colors.blue
-                        : Colors.grey,
-                  )),
-              title: Text(formatter
-                  .format(appManager.alarmList.elementAt(idx).alarmTime)),
-              subtitle: Text('알람'),
-              trailing: Switch(
-                value: appManager.alarmList.elementAt(idx).alarmOn,
-                onChanged: (newValue) {
-                  setState(() {
-                    //appManager.alarmList.elementAt(idx).setAlarmOn(newValue);
-                    appManager.reserveAlarmFireOnOff(
-                        index: idx, alarmActive: newValue);
-                  });
-                },
-              ),
-              onTap: () {
-                setAlarm(context, index: idx, finished: () {
-                  setState(() {});
-                });
-              },
-              onLongPress: () {
-                var alarmDeleteFuture = deleteAlarmDialogAt(idx, context);
-                alarmDeleteFuture.then((needUIUpdate) {
-                  if (needUIUpdate) {
-                    setState(() {});
-                  }
-                });
-              },
-            );
-          }),
+      body: appManager.alarmList.length < 1
+          ? Center(
+              child: IconButton(
+                  icon: Icon(Icons.alarm_add),
+                  iconSize: 80,
+                  color: Colors.blueAccent,
+                  onPressed: () {
+                    setAlarm(context, finished: () {
+                      setState(() {});
+                    });
+                  }),
+            )
+          : ListView.builder(
+              itemCount: appManager.alarmList.length,
+              physics: BouncingScrollPhysics(),
+              itemBuilder: (_, idx) {
+                var oneEntity = appManager.alarmList.elementAt(idx);
+                var formatter = DateFormat('y-MM-dd HH:mm');
+                var subTitleString;
+                var iconColor;
+                switch (oneEntity.alarmState) {
+                  case AlarmState.disabled:
+                    subTitleString = '비활성';
+                    iconColor = Colors.blueGrey[600];
+                    break;
+                  case AlarmState.active:
+                    subTitleString = '예약된 알람';
+                    iconColor = Colors.blue;
+                    break;
+                  case AlarmState.firing:
+                    subTitleString = '진행중';
+                    iconColor = Colors.red;
+                    break;
+                  case AlarmState.passed:
+                    subTitleString = '지난 알람';
+                    iconColor = Colors.blueGrey[100];
+                    break;
+                }
+                return ListTile(
+                  leading: Padding(
+                      padding: EdgeInsets.fromLTRB(10, 10, 5, 10),
+                      child: Icon(
+                        Icons.alarm,
+                        size: 40,
+                        color: iconColor,
+                      )),
+                  title: Text(formatter.format(oneEntity.alarmTime)),
+                  subtitle: Text(subTitleString),
+                  trailing: Switch(
+                    value: appManager.alarmList.elementAt(idx).alarmOn,
+                    onChanged: (newValue) {
+                      setState(() {
+                        //appManager.alarmList.elementAt(idx).setAlarmOn(newValue);
+                        appManager.reserveAlarmFireOnOff(
+                            index: idx, alarmActive: newValue);
+                      });
+                    },
+                  ),
+                  onTap: () {
+                    setAlarm(context, index: idx, finished: () {
+                      setState(() {});
+                    });
+                  },
+                  onLongPress: () {
+                    var alarmDeleteFuture = deleteAlarmDialogAt(idx, context);
+                    alarmDeleteFuture.then((needUIUpdate) {
+                      if (needUIUpdate) {
+                        setState(() {});
+                      }
+                    });
+                  },
+                );
+              }),
       floatingActionButton: FloatingActionButton(
         child: Icon(Icons.alarm_add),
         onPressed: () {
