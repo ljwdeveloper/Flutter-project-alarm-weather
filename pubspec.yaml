@@ -33,6 +33,9 @@ dependencies:
   shared_preferences: ^2.0.6
   android_alarm_manager_plus: ^1.0.2
   just_audio: ^0.9.5
+  flutter_local_notifications: ^8.1.1+1
+  timezone: ^0.7.0
+  rxdart: ^0.27.1
 
 dev_dependencies:
   flutter_test:

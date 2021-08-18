@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:testproject_alarm_weather/main.dart';
 import 'structures.dart';
+import 'package:rxdart/subjects.dart';
 
 class AlarmPage extends StatefulWidget {
   AlarmPage();
@@ -26,6 +27,7 @@ class _AlarmPageState extends State<AlarmPage> {
         setState(() {});
       }
     });
+
     super.initState();
   }
 
@@ -36,10 +38,10 @@ class _AlarmPageState extends State<AlarmPage> {
           ? Center(
               child: IconButton(
                   icon: Icon(Icons.alarm_add),
-                  iconSize: 80,
+                  iconSize: 100,
                   color: Colors.blueAccent,
                   onPressed: () {
-                    setAlarm(context, finished: () {
+                    showDateTimePicker(context, finished: () {
                       setState(() {});
                     });
                   }),
@@ -85,20 +87,33 @@ class _AlarmPageState extends State<AlarmPage> {
                     onChanged: (newValue) {
                       setState(() {
                         //appManager.alarmList.elementAt(idx).setAlarmOn(newValue);
-                        appManager.reserveAlarmFireOnOff(
+                        appManager.insertReserveAlarm(
                             index: idx, alarmActive: newValue);
                       });
                     },
                   ),
                   onTap: () {
-                    setAlarm(context, index: idx, finished: () {
+                    showDateTimePicker(context, index: idx, finished: () {
                       setState(() {});
                     });
                   },
                   onLongPress: () {
                     var alarmDeleteFuture = deleteAlarmDialogAt(idx, context);
-                    alarmDeleteFuture.then((needUIUpdate) {
+                    alarmDeleteFuture.then((needUIUpdate) async {
                       if (needUIUpdate) {
+                        showDialog(
+                            context: context,
+                            builder: (BuildContext context) => AlertDialog(
+                                shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.all(
+                                        Radius.circular(32.0))),
+                                content: Icon(
+                                  Icons.alarm_off,
+                                  size: 100,
+                                  color: Colors.blueGrey[600],
+                                )));
+                        await Future.delayed(Duration(seconds: 2))
+                            .then((_) => Navigator.pop(context));
                         setState(() {});
                       }
                     });
@@ -106,13 +121,25 @@ class _AlarmPageState extends State<AlarmPage> {
                 );
               }),
       floatingActionButton: FloatingActionButton(
-        child: Icon(Icons.alarm_add),
-        onPressed: () {
-          setAlarm(context, finished: () {
-            setState(() {});
-          });
-        },
-      ),
+          child: Icon(Icons.alarm_add),
+          onPressed: () async {
+            if (appManager.alarmList.length > 999) {
+              showDialog(
+                  context: context,
+                  builder: (BuildContext context) => AlertDialog(
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.all(Radius.circular(32.0))),
+                      content: Text(
+                          '알람은 최대 1000개 까지만 등록할 수 있습니다.\n사용하지 않는 알람은 길게 눌러 삭제하십시오.')));
+              await Future.delayed(Duration(seconds: 2))
+                  .then((_) => Navigator.pop(context));
+            } else {
+              showDateTimePicker(context, finished: () {
+                setState(() {});
+              });
+            }
+          }),
     );
   }
 }
@@ -137,7 +164,7 @@ Future deleteAlarmDialogAt(int idx, BuildContext context) {
               ),
               TextButton(
                   onPressed: () {
-                    Navigator.pop(context);
+                    Navigator.pop(context, false);
                   },
                   child: Text(
                     '취소',
@@ -150,7 +177,7 @@ Future deleteAlarmDialogAt(int idx, BuildContext context) {
   return deleteAlarm;
 }
 
-void setAlarm(BuildContext context,
+void showDateTimePicker(BuildContext context,
     {int? index, required void Function() finished}) {
   Future<DateTime?> tempAlarmDate = pickAlarmDate(context);
   tempAlarmDate.then((dateValue) {
@@ -161,7 +188,7 @@ void setAlarm(BuildContext context,
         if (timeValue != null) {
           tempDT = DateTime(dateValue.year, dateValue.month, dateValue.day,
               timeValue.hour, timeValue.minute);
-          appManager.insertAlarmAt(tempDT, index: index);
+          appManager.insertReserveAlarm(alarmTime: tempDT, index: index);
           finished();
         }
       });

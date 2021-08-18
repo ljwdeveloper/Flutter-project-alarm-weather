@@ -1,26 +1,80 @@
 import 'dart:ui';
-
-import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'alarmpage.dart';
 import 'structures.dart';
+import 'package:rxdart/subjects.dart';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
 
+final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+    FlutterLocalNotificationsPlugin();
 late AppManager appManager;
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  const AndroidInitializationSettings initializationSettingsAndroid =
+      AndroidInitializationSettings('app_icon');
+
+  /// Note: permissions aren't requested here just to demonstrate that can be
+  /// done later
+  final IOSInitializationSettings initializationSettingsIOS =
+      IOSInitializationSettings(
+          requestAlertPermission: false,
+          requestBadgePermission: false,
+          requestSoundPermission: false);
+  const MacOSInitializationSettings initializationSettingsMacOS =
+      MacOSInitializationSettings(
+    requestAlertPermission: false,
+    requestBadgePermission: false,
+    requestSoundPermission: false,
+  );
+
+  final InitializationSettings initializationSettings = InitializationSettings(
+    android: initializationSettingsAndroid,
+    iOS: initializationSettingsIOS,
+    macOS: initializationSettingsMacOS,
+  );
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings,
+      onSelectNotification: (String? payload) async {
+    if (payload != null) {
+      debugPrint('notification payload: $payload');
+    }
+  });
+
   appManager = AppManager();
+
   runApp(MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatelessWidget with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
+    WidgetsBinding.instance?.addObserver(this);
     return MaterialApp(
       title: 'Example Project Demo',
       theme: ThemeData(primarySwatch: Colors.blue),
       home: RootPage(title: 'Alarm and Weather'),
     );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    switch (state) {
+      case AppLifecycleState.resumed:
+        debuggerLog('APP LIFE CYCLE resumed.');
+        break;
+      case AppLifecycleState.inactive:
+        debuggerLog('APP LIFE CYCLE inactive.');
+        break;
+      case AppLifecycleState.detached:
+        debuggerLog('APP LIFE CYCLE detached.');
+        break;
+      case AppLifecycleState.paused:
+        debuggerLog('APP LIFE CYCLE paused.');
+        break;
+    }
   }
 }
 
@@ -53,14 +107,6 @@ class _RootPageState extends State<RootPage> {
       _naviPageList.add(item.bodyWidget);
     }
     super.initState();
-  }
-
-  Future<void> _incrementCounter() async {
-    debuggerLog('Increment counter!');
-    await appManager.prefs.reload();
-    setState(() {
-      _counter++;
-    });
   }
 
   @override

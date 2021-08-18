@@ -1,15 +1,19 @@
 import 'dart:isolate';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:android_alarm_manager_plus/android_alarm_manager_plus.dart';
-//import 'package:audioplayers/audioplayers.dart';
 import 'package:just_audio/just_audio.dart';
 import 'dart:convert';
+import 'package:timezone/timezone.dart' as tz;
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:testproject_alarm_weather/main.dart';
 
 const String countKey = 'count';
 const String isolateName = 'isolate';
+const Duration alarmFiringDurationInSeconds = Duration(seconds: 120);
 enum AlarmState { disabled, active, firing, passed }
 
 void debuggerLog(Object message) {
@@ -44,11 +48,11 @@ class Alarm {
   AlarmState alarmState; //
   Alarm(
       {required DateTime alarmAt,
-      bool alarmActive = true,
+      bool? alarmActive,
       int alarmStackId = 0,
       AlarmState state = AlarmState.active})
       : alarmTime = alarmAt,
-        alarmOn = alarmActive,
+        alarmOn = alarmActive ?? true,
         alarmState = state,
         alarmid = alarmStackId;
   void setAlarmOn(bool alarmActive) {
@@ -91,20 +95,23 @@ class Alarm {
 
 class AppManager {
   static final AppManager _instance = AppManager._internal();
-  static SendPort? uiSendPort;
   List<Alarm> alarmList = [];
   List<String> alarmRawData = [];
   late SharedPreferences prefs;
   final ReceivePort port = ReceivePort();
+  static SendPort? uiSendPort;
+  static final AudioPlayer audioPlayer = AudioPlayer();
 
   factory AppManager() => _instance;
   AppManager._internal() {
-    debuggerLog('App Manager is created.');
+    debuggerLog(
+        'App Manager is created. audio player : ${audioPlayer.toString()} / ${audioPlayer.hashCode}');
   }
 
   Future<void> prepareAlarmList(Function alarmCallbackAfter) async {
     debuggerLog('f: prepareAppManager');
     AndroidAlarmManager.initialize();
+    tz.initializeTimeZones();
     prefs = await SharedPreferences.getInstance();
     IsolateNameServer.registerPortWithName(port.sendPort, isolateName);
     await getSavedAlarmInfo();
@@ -114,13 +121,34 @@ class AppManager {
       var aa = AlarmState.values
           .firstWhere((e) => e.toString() == message['alarmState']);
       bool alarmActive = message['alarmActive'];
+      Alarm? theEntity;
       for (Alarm oneEntity in alarmList) {
         if (oneEntity.alarmid == alarmid) {
-          oneEntity.alarmState = aa;
-          oneEntity.alarmOn = alarmActive;
+          theEntity = oneEntity;
+          break;
         }
       }
-      alarmCallbackAfter();
+      if (theEntity == null) {
+        debuggerLog('the alarm is not in the list.');
+        alarmCallbackAfter();
+      } else {
+        if (theEntity.alarmState == AlarmState.disabled) {
+        } else if (theEntity.alarmTime
+            .add(alarmFiringDurationInSeconds)
+            .isBefore(DateTime.now())) {
+          theEntity.alarmState = AlarmState.passed;
+        } else if (theEntity.alarmTime.isBefore(DateTime.now())) {
+          theEntity.alarmState = AlarmState.firing;
+        }
+        theEntity.alarmState = aa;
+        theEntity.alarmOn = alarmActive;
+        int index = alarmList.indexOf(theEntity);
+        alarmRawData.removeAt(index);
+        alarmRawData.insert(index, json.encode(theEntity.toJsonString()));
+        debuggerLog(
+            'alarm searched in the list and json updated.\n$alarmRawData');
+        alarmCallbackAfter();
+      }
     });
   }
 
@@ -134,72 +162,123 @@ class AppManager {
     debuggerLog('f: getSavedAlarmInfo $alarmList');
   }
 
-//static, 즉 클래스 메서드여야 알람 콜백이 작동함.
-//foreground 작동성공.
-//background (최소화된) 작동성공.
-//sleep (종료이후) 에러상황.
   static Future<void> callback(int value) async {
-    final player = AudioPlayer();
     var message = {
       'alarmid': value,
       'alarmState': AlarmState.firing.toString(),
       'alarmActive': true
     };
-    debuggerLog('alarm fired! value : $value');
-    var duration = await player.setAsset('audios/bts_idol.mp3');
-    player.play();
+    debuggerLog(
+        'f: callback / alarm fired! value : $value.. audio playing? ${audioPlayer.playing}');
+    debuggerLog(
+        'f: callback / audio player : ${audioPlayer.toString()} / ${audioPlayer.hashCode}');
+    var duration = await audioPlayer.setAsset('audios/bts_idol.mp3');
+    audioPlayer.play();
     uiSendPort ??= IsolateNameServer.lookupPortByName(isolateName);
     uiSendPort?.send(message);
-    Future.delayed(Duration(seconds: 15)).then((value) {
-      player.pause();
+    debuggerLog('audio playing? ${audioPlayer.playing}');
+    debuggerLog(
+        'audio player : ${audioPlayer.toString()} / ${audioPlayer.hashCode}');
+    Future.delayed(alarmFiringDurationInSeconds).then((value) {
+      debuggerLog('callback delayed! audio playing? ${audioPlayer.playing}');
+      audioPlayer.stop();
+      audioPlayer.dispose();
+      debuggerLog('callback delayed! audio playing? ${audioPlayer.playing}');
       message['alarmState'] = AlarmState.passed.toString();
       message['alarmActive'] = false;
-      debuggerLog('player paused as 15sec passed.. message sending : $message');
+      debuggerLog(
+          'player paused as ${alarmFiringDurationInSeconds.inSeconds}sec passed.. message sending : $message');
       uiSendPort?.send(message);
     });
   }
 
-  Future<void> insertAlarmAt(DateTime alarmTime, {int? index}) async {
-    var newElement = Alarm(alarmAt: alarmTime);
-    newElement.alarmid = newElement.hashCode;
+//스위치 위젯에서 호출시 alarmTime:null / index:non-null / alarmActive:non-null
+//알람추가버튼 호출시 alarmTime:non-null / index:null / alarmActive:null
+//기존알람재설정시 alarmTime:non-null / index:non-null / alarmActive:null
+  Future<void> insertReserveAlarm(
+      {DateTime? alarmTime, int? index, bool? alarmActive}) async {
+    Alarm newElement;
+//Alarm 객체에 시간&스위치&ID 할당
     if (index == null) {
-      alarmList.add(newElement);
-      alarmRawData.add(json.encode(alarmList.last.toJsonString()));
-      reserveAlarmFireOnOff(index: alarmList.length - 1);
+      newElement = Alarm(alarmAt: alarmTime!);
+      newElement.alarmid = newElement.hashCode;
     } else {
-      alarmList.removeAt(index);
-      alarmList.insert(index, newElement);
-      alarmRawData.removeAt(index);
-      alarmRawData.insert(
-          index, json.encode(alarmList.elementAt(index).toJsonString()));
-      reserveAlarmFireOnOff(index: index);
+      newElement = alarmList.elementAt(index);
+      if (alarmTime != null) newElement.alarmTime = alarmTime;
+      if (alarmActive != null) newElement.alarmOn = alarmActive;
     }
-    debuggerLog('f: insertAlarmAt $alarmTime, ${index ?? alarmList.length}}');
-    debuggerLog('f: insertAlarmAt $alarmRawData');
-    await prefs.setStringList('alarmData', alarmRawData);
-  }
-
-  void reserveAlarmFireOnOff({required int index, bool? alarmActive}) {
-    Alarm target = alarmList.elementAt(index);
-    debuggerLog('f: reserveAlarm / alarm id : ${target.alarmid}');
-    if (alarmActive != null) {
-      target.setAlarmOn(alarmActive);
-    }
-    if (target.alarmOn) {
-      if (target.alarmTime.isBefore(DateTime.now())) {
-        target.alarmState = AlarmState.passed;
-      } else {
-        target.alarmState = AlarmState.active;
+    //Alarm 객체가 ON 일 때 state 처리와 알람매니저 등록
+    if (newElement.alarmOn) {
+      if (newElement.alarmTime
+          .add(alarmFiringDurationInSeconds)
+          .isBefore(DateTime.now())) {
+        newElement.alarmState = AlarmState.passed;
+      } else if (newElement.alarmTime.isBefore(DateTime.now())) {
+        newElement.alarmState = AlarmState.firing;
         AndroidAlarmManager.oneShotAt(
-            target.alarmTime, target.alarmid, callback,
+            DateTime.now(), newElement.alarmid, callback,
             alarmClock: true,
             exact: true,
             wakeup: true,
             rescheduleOnReboot: true);
+        await flutterLocalNotificationsPlugin.show(
+            newElement.alarmid,
+            '알람 :',
+            '${DateTime.now().toString()}',
+            NotificationDetails(
+                //android: androidPlatformChannelSpecifics,
+                android: AndroidNotificationDetails(
+                    'your channel id', '알람', '${DateTime.now().toString()}',
+                    importance: Importance.max,
+                    priority: Priority.high,
+                    showWhen: false)));
+      } else {
+        newElement.alarmState = AlarmState.active;
+        AndroidAlarmManager.oneShotAt(
+            newElement.alarmTime, newElement.alarmid, callback,
+            alarmClock: true,
+            exact: true,
+            wakeup: true,
+            rescheduleOnReboot: true);
+        await flutterLocalNotificationsPlugin.zonedSchedule(
+            newElement.alarmid,
+            '알람 :',
+            '${newElement.alarmTime.toString()}',
+            tz.TZDateTime.from(newElement.alarmTime, tz.local),
+            NotificationDetails(
+                //android: androidPlatformChannelSpecifics,
+                android: AndroidNotificationDetails('your channel id', '알람',
+                    '${newElement.alarmTime.toString()}',
+                    importance: Importance.max,
+                    priority: Priority.high,
+                    showWhen: false)),
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+            androidAllowWhileIdle: true);
       }
     } else {
-      AndroidAlarmManager.cancel(target.alarmid);
+      debuggerLog(
+          'f: insertreserve / ${newElement.alarmid} alarm OFF.. audio playing? ${audioPlayer.playing}');
+      debuggerLog(
+          'f: insertreserve / audio player : ${audioPlayer.toString()} / ${audioPlayer.hashCode}');
+      //Alarm 객체가 OFF 일 때 알람매니저 제거
+      newElement.alarmState = AlarmState.disabled;
+      AndroidAlarmManager.cancel(newElement.alarmid);
+      await audioPlayer.stop();
+      await audioPlayer.dispose();
+      await flutterLocalNotificationsPlugin.cancel(newElement.alarmid);
     }
+
+//리스트 모델구조 처리, shared-preference 에 저장.
+    if (index == null) {
+      alarmList.add(newElement);
+      alarmRawData.add(json.encode(alarmList.last.toJsonString()));
+    } else {
+      alarmRawData.removeAt(index);
+      alarmRawData.insert(index, json.encode(newElement.toJsonString()));
+    }
+    debuggerLog('f: insertReserveAlarm $alarmRawData');
+    await prefs.setStringList('alarmData', alarmRawData);
   }
 
   Future<void> deleteAlarmAt(int idx) async {
@@ -209,6 +288,7 @@ class AppManager {
     alarmList.removeAt(idx);
     alarmRawData.removeAt(idx);
     AndroidAlarmManager.cancel(alarmid);
+    await flutterLocalNotificationsPlugin.cancel(alarmid);
     await prefs.setStringList('alarmData', alarmRawData);
   }
 }
