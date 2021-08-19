@@ -12,21 +12,24 @@ class AlarmPage extends StatefulWidget {
 
 class _AlarmPageState extends State<AlarmPage> {
   var _counter = 0;
-  AppManager appManager = AppManager();
+  var appManager = AppManager();
 
   @override
   void initState() {
-    appManager.prepareAlarmList(() {
-      debuggerLog(
-          'f: RootPageState.initState() / prepareAppManager / alarmCallbackAfter');
-      setState(() {});
-    }).then((_) {
-      debuggerLog('f: RootPageState.initState() / prepareAppManager / then');
-      if (appManager.alarmList.length == 0) {
-      } else {
+    if (appManager.alarmListPrepared) {
+    } else {
+      appManager.prepareAlarmList(() {
+        debuggerLog(
+            'f: RootPageState.initState() / prepareAppManager / alarmCallbackAfter');
         setState(() {});
-      }
-    });
+      }).then((_) {
+        debuggerLog('f: RootPageState.initState() / prepareAppManager / then');
+        if (appManager.alarmList.length == 0) {
+        } else {
+          setState(() {});
+        }
+      });
+    }
 
     super.initState();
   }

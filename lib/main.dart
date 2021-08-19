@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter/material.dart';
 import 'alarmpage.dart';
 import 'structures.dart';
+import 'weatherpage.dart';
 import 'package:rxdart/subjects.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
@@ -138,41 +139,6 @@ class _RootPageState extends State<RootPage> {
                 curve: Curves.easeOutSine);
           });
         },
-      ),
-    );
-  }
-}
-
-class WeatherPage extends StatefulWidget {
-  WeatherPage();
-  @override
-  _WeatherPageState createState() => _WeatherPageState();
-}
-
-class _WeatherPageState extends State<WeatherPage> {
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.max,
-        children: [
-          Text(
-            'data',
-            style: TextStyle(fontSize: 40, fontWeight: FontWeight.w300),
-          ),
-          SizedBox(
-            height: 20,
-          ),
-          Icon(Icons.wb_cloudy, size: 150, color: Colors.blue),
-          SizedBox(
-            height: 20,
-          ),
-          Text(
-            'data2',
-            style: TextStyle(fontSize: 45, fontWeight: FontWeight.w400),
-          )
-        ],
       ),
     );
   }

@@ -10,6 +10,8 @@ import 'dart:convert';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:testproject_alarm_weather/main.dart';
+import 'package:weather/weather.dart';
+import 'package:geolocator/geolocator.dart';
 
 const String countKey = 'count';
 const String isolateName = 'isolate';
@@ -101,6 +103,10 @@ class AppManager {
   final ReceivePort port = ReceivePort();
   static SendPort? uiSendPort;
   static final AudioPlayer audioPlayer = AudioPlayer();
+  String? geometryRawData;
+  String? placeName;
+  String? weatherHere;
+  bool alarmListPrepared = false;
 
   factory AppManager() => _instance;
   AppManager._internal() {
@@ -115,6 +121,8 @@ class AppManager {
     prefs = await SharedPreferences.getInstance();
     IsolateNameServer.registerPortWithName(port.sendPort, isolateName);
     await getSavedAlarmInfo();
+    alarmListPrepared = true;
+
     port.listen((message) {
       debuggerLog('port listened : $message');
       int alarmid = message['alarmid'];
@@ -152,6 +160,61 @@ class AppManager {
     });
   }
 
+  Future<void> prepareWeatherInfo(Function infoCallback) async {
+    bool serviceEnabled;
+    LocationPermission permission;
+    serviceEnabled = await Geolocator.isLocationServiceEnabled();
+    double lat = 37.5683;
+    double lon = 126.9778;
+    if (!serviceEnabled) {
+      debuggerLog(
+          'f: prepareWeatherInfo / get location service disabled.. default 37.5/126.9');
+    }
+    permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied) {
+      permission = await Geolocator.requestPermission();
+      if (permission == LocationPermission.denied) {
+        debuggerLog(
+            'f: prepareWeatherInfo / get location permission denied.. default 37.5/126.9');
+      }
+    }
+    if (permission == LocationPermission.deniedForever) {
+      debuggerLog(
+          'f: prepareWeatherInfo / get location permission deniedF.. default 37.5/126.9');
+    }
+    try {
+      Position currentPosition = await Geolocator.getCurrentPosition();
+      lat = currentPosition.latitude;
+      lon = currentPosition.longitude;
+    } catch (e) {
+      debuggerLog('f: prepareWeatherInfo / get position err: $e');
+    }
+    String key = '856822fd8e22db5e1ba48c0e7d69844a';
+    WeatherFactory wf = WeatherFactory(key);
+    Weather currentWeather = await wf.currentWeatherByLocation(lat, lon);
+    debuggerLog(currentWeather.toString());
+    geometryRawData = currentWeather.toString();
+    /*
+    Place Name: Kwangmyŏng [KR] (37.5285, 126.8743)
+    Date: 2021-08-19 10:53:12.000
+    Weather: Clear, clear sky
+    Temp: 27.0 Celsius, Temp (min): 26.0 Celsius, Temp (max): 28.5 Celsius,  Temp (feels like): 27.4 Celsius
+    Sunrise: 2021-08-19 05:51:43.000, Sunset: 2021-08-19 19:21:00.000
+    Wind: speed 4.12, degree: 110.0, gust null
+    Weather Condition code: 800
+*/
+    var f = NumberFormat('###.0###');
+    String placeSplitter = 'Place Name: ';
+    String latlonSplitter = ' (${f.format(lat)}, ${f.format(lon)})';
+    placeName = geometryRawData!.split(placeSplitter).last;
+    placeName = placeName!.split(latlonSplitter).first;
+    String weatherSplitter = 'Weather: ';
+    String tempSplitter = 'Temp: ';
+    weatherHere = geometryRawData!.split(weatherSplitter).last;
+    weatherHere = weatherHere!.split(tempSplitter).first;
+    infoCallback();
+  }
+
   Future<void> getSavedAlarmInfo() async {
     alarmRawData = prefs.getStringList('alarmData') ?? [];
     debuggerLog('saved alarm data : $alarmRawData');
@@ -168,22 +231,13 @@ class AppManager {
       'alarmState': AlarmState.firing.toString(),
       'alarmActive': true
     };
-    debuggerLog(
-        'f: callback / alarm fired! value : $value.. audio playing? ${audioPlayer.playing}');
-    debuggerLog(
-        'f: callback / audio player : ${audioPlayer.toString()} / ${audioPlayer.hashCode}');
     var duration = await audioPlayer.setAsset('audios/bts_idol.mp3');
     audioPlayer.play();
     uiSendPort ??= IsolateNameServer.lookupPortByName(isolateName);
     uiSendPort?.send(message);
-    debuggerLog('audio playing? ${audioPlayer.playing}');
-    debuggerLog(
-        'audio player : ${audioPlayer.toString()} / ${audioPlayer.hashCode}');
     Future.delayed(alarmFiringDurationInSeconds).then((value) {
-      debuggerLog('callback delayed! audio playing? ${audioPlayer.playing}');
       audioPlayer.stop();
       audioPlayer.dispose();
-      debuggerLog('callback delayed! audio playing? ${audioPlayer.playing}');
       message['alarmState'] = AlarmState.passed.toString();
       message['alarmActive'] = false;
       debuggerLog(
